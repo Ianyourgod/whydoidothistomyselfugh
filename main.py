@@ -25,6 +25,9 @@ class Interpreter:
         tokens = []
         j = 0
         txt = ""
+        if code[0] in " \t":
+            while code[0] in " \t":
+                code = code[1:]
         while j < len(code):
             i = code[j]
             if i == None:
@@ -209,7 +212,7 @@ class Interpreter:
                         print()
                     else:
                         innerTokens = tokens[2:-1]
-                        print(self.runLine(innerTokens))
+                        print(self.runLine(innerTokens)[1:-1])
                 else:
                     return("BUILTIN FUNCTION: print")
                 return
@@ -258,6 +261,9 @@ class Interpreter:
                             self.vars[tokens[0]] = self.vars[tokens[0]] ** self.runLine(tokens[3:])
                     else:
                         self.vars[tokens[0]] = self.runLine(self.vars[tokens[0]] + tokens[1] + tokens[2])
+            elif tokens[0] == "if":
+                if self.runAST(tokens[1:-1]) == "True":
+                    self.open_brackets -= 1
             elif "{" in tokens:
                 pass
             elif "}" in tokens:
@@ -271,12 +277,12 @@ class Interpreter:
             self.open_brackets -= 1
             
             
-    def runAST(self, tokens: list) -> None:
+    def runAST(self, tokens: list[str]) -> None:
         for i in tokens:
-            if not i.isnumeric() and i not in ["+", "-", "*", "/", "%", "^", "&", "|", "!", "<", ">", "?", ".", "==", "=","(",")"]:
+            if not ((i.isnumeric() or i in ["+", "-", "*", "/", "%", "^", "&", "|", "!", "<", ">", "?", ".", "==", "=","(",")"]) or self.isstring(i)):
+                print(self.isstring(i))
                 print(f"ERROR: expected number, got '{i}'")
                 return f"ERROR: expected number, got '{i}'"
-
         return str(eval("".join(tokens)))
     def isstring(self, string: str) -> bool:
         if string[0] == '"' and string[-1] == '"':
@@ -315,7 +321,7 @@ class Interpreter:
                 print("ERROR: expected '+' or '*' when concatenating strings")
                 return "ERROR: expected '+' or '*' when concatenating strings"
             j += 1
-        return final
+        return f'"{final}"'
         
 if __name__ == "__main__":
     inter = Interpreter()
