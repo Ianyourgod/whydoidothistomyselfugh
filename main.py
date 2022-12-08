@@ -1,12 +1,47 @@
+class Function:
+    def __init__(self,params,at,interpreter) -> None:
+        self.params = params
+        self.at = at
+        self.interpreter = interpreter
+        self.get_code()
+    def parse_params(self):
+        ret = []
+        for i in self.params:
+            if i == ",":
+                continue
+            ret.append(i)
+        return ret
+    def get_code(self):
+        self.code = ""
+        i = self.at
+        open_parens = 1
+        #print(self.interpreter.code)
+        code = self.interpreter.getLines(self.interpreter.code)
+        #print(code)
+        while i < len(code):
+            tokens = self.interpreter.tokenize(code[i])
+            if "{" in tokens:
+                open_parens += 1
+            if "}" in tokens:
+                open_parens -= 1
+            if open_parens == 0:
+                break
+            self.code += code[i] + "\n"
+            i += 1
+
 class Interpreter:
-    def __init__(self) -> None:
+    def __init__(self,code=None) -> None:
         self.vars = {}
         self.functions = {}
+        self.function_stack = []
+        self.line = 0
         self.open_brackets = 0
+        self.code = code
     def getLines(self, code: str) -> list:
         ret = []
         txt = ""
         j = 0
+        print(code)
         while j < len(code):
             i = code[j]
             if i in " \t":
@@ -164,6 +199,11 @@ class Interpreter:
                     j += 1
                 else:
                     tokens.append("=")
+            elif i == "#":
+                if txt != "":
+                    tokens.append(txt)
+                    txt = ""
+                tokens.append("#")
             elif i.isnumeric():
                 while j < len(code) and code[j].isnumeric():
                     txt += code[j]
@@ -186,6 +226,7 @@ class Interpreter:
         else: tokens = self.tokenize(line)
         if (len(tokens) == 0):
             return
+        self.line += 1
         if self.open_brackets < 1:
             # replaces all variables with their values
             j = 0
@@ -264,6 +305,27 @@ class Interpreter:
             elif tokens[0] == "if":
                 if self.runAST(tokens[1:-1]) == "True":
                     self.open_brackets -= 1
+            elif tokens[0] == "#":
+                return
+            #elif tokens[0] == "func":
+            #    if tokens[1] in self.funcs:
+            #        print("ERROR: function '" + tokens[1] + "' already exists")
+            #        return "ERROR: function '" + tokens[1] + "' already exists"
+            #    j = 3
+            #    params = []
+            #    while tokens[j] != ")":
+            #        params.append(tokens[j])
+            #        j += 1
+            #    self.funcs[tokens[1]] = Function(params, self.line+1)
+            #elif tokens[0] in self.functions:
+            #    if tokens[1] == "(":
+            #        j = 2
+            #        params = []
+            #        while tokens[j] != ")":
+            #            params.append(tokens[j])
+            #            j += 1
+            #        # get code
+            #        linen = self.functions[tokens[0]].at
             elif "{" in tokens:
                 pass
             elif "}" in tokens:
@@ -274,6 +336,8 @@ class Interpreter:
         if "{" in tokens:
             self.open_brackets += 1
         if "}" in tokens:
+            if self.open_brackets == 0:
+                self.open_brackets += 1
             self.open_brackets -= 1
             
             
@@ -322,6 +386,31 @@ class Interpreter:
                 return "ERROR: expected '+' or '*' when concatenating strings"
             j += 1
         return f'"{final}"'
+    def virtual_runner(self, lines: list[str], line) -> None:
+        j = line - 1
+        open_bracks = 1
+        code = []
+        while j < len(lines):
+            tokens = self.tokenize(lines[j])
+            if "{" in tokens:
+                open_bracks += 1
+            if "}" in tokens:
+                open_bracks -= 1
+            if open_bracks == 0:
+                break
+            code.append(lines[j])
+            j += 1
+        virtual_inter = Interpreter()
+        virtual_inter.vars = self.vars
+        virtual_inter.functions = self.functions
+    def run(self,code: str) -> None:
+        print(code)
+        lines = self.getLines(code)
+        self.line = 0
+        print(lines)
+        while self.line < len(lines):
+            self.runLine(lines[self.line])
+            self.line += 1
         
 if __name__ == "__main__":
     inter = Interpreter()
