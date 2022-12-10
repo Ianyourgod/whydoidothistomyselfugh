@@ -1,25 +1,52 @@
+class Function:
+    def __init__(self, args: str, at: int, inter) -> None:
+        self.args = args
+        self.inter = inter
+        self.at = at
+        self.code = self.getCode()
+    def getCode(self) -> str:
+        open_bracks = 1
+        for i in range(self.at+1, len(self.inter.lines)):
+            line = self.inter.lines[i]
+            for j in line:
+                if j == "{":
+                    open_bracks += 1
+                elif j == "}":
+                    open_bracks -= 1
+            if open_bracks == 0:
+                return self.inter.code[self.at+1:i]
+
+
 class Interpreter:
-    def __init__(self) -> None:
+    def __init__(self,code=None) -> None:
         self.vars = {}
         self.functions = {}
         self.open_brackets = 0
+        self.code = code
+        self.line = 0
+        if code:
+            self.lines = self.getLines(code)
     def getLines(self, code: str) -> list:
         ret = []
         txt = ""
         j = 0
+        i = code[j]
+        if i in " \t":
+            while i in " \t" and j < len(code):
+                j += 1
+                i = code[j]
         while j < len(code):
             i = code[j]
-            if i in " \t":
-                while i in " \t" and j < len(code):
-                    j += 1
-                    i = code[j]
             if i == "\n":
                 if txt != "":
                     ret.append(txt)
                 txt = ""
+            else:
+                txt += i
             j += 1
         if txt != "":
             ret.append(txt)
+        print(code)
         return ret
     def tokenize(self,code: str) -> list:
         tokens = []
@@ -164,6 +191,11 @@ class Interpreter:
                     j += 1
                 else:
                     tokens.append("=")
+            elif i == "#":
+                if txt != "":
+                    tokens.append(txt)
+                    txt = ""
+                tokens.append("#")
             elif i.isnumeric():
                 while j < len(code) and code[j].isnumeric():
                     txt += code[j]
@@ -225,7 +257,6 @@ class Interpreter:
                         return input(self.runLine(innerTokens))
                 else:
                     return("BUILTIN FUNCTION: input")
-                return
             elif tokens[0] == None:
                 print("ERROR: unexpected none-type")
                 return "ERROR: unexpected none-type"
@@ -264,6 +295,12 @@ class Interpreter:
             elif tokens[0] == "if":
                 if self.runAST(tokens[1:-1]) == "True":
                     self.open_brackets -= 1
+            elif tokens[0] == "func":
+                if tokens[1] in self.funcs:
+                    print("ERROR: function '" + tokens[1] + "' already exists")
+                    return "ERROR: function '" + tokens[1] + "' already exists"
+            elif tokens[0] == "#":
+                return
             elif "{" in tokens:
                 pass
             elif "}" in tokens:
@@ -322,7 +359,13 @@ class Interpreter:
                 return "ERROR: expected '+' or '*' when concatenating strings"
             j += 1
         return f'"{final}"'
+    def run(self):
+        self.line = 0
+        while self.line < len(self.lines):
+            print(self.runLine(self.lines[self.line]))
+            self.line += 1
         
 if __name__ == "__main__":
-    inter = Interpreter()
-    print(inter.runLine("print('hello world')"))
+    inter = Interpreter("print('hello world')")
+    print(inter.lines)
+    inter.run()
