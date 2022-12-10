@@ -1,26 +1,9 @@
-class Function:
-    def __init__(self, args: str, at: int, inter) -> None:
-        self.args = args
-        self.inter = inter
-        self.at = at
-        self.code = self.getCode()
-    def getCode(self) -> str:
-        open_bracks = 1
-        for i in range(self.at+1, len(self.inter.lines)):
-            line = self.inter.lines[i]
-            for j in line:
-                if j == "{":
-                    open_bracks += 1
-                elif j == "}":
-                    open_bracks -= 1
-            if open_bracks == 0:
-                return self.inter.code[self.at+1:i]
-
-
 class Interpreter:
     def __init__(self,code=None) -> None:
         self.vars = {}
         self.functions = {}
+        self.function_stack = []
+        self.line = 0
         self.open_brackets = 0
         self.code = code
         self.line = 0
@@ -218,6 +201,7 @@ class Interpreter:
         else: tokens = self.tokenize(line)
         if (len(tokens) == 0):
             return
+        self.line += 1
         if self.open_brackets < 1:
             # replaces all variables with their values
             j = 0
@@ -311,6 +295,8 @@ class Interpreter:
         if "{" in tokens:
             self.open_brackets += 1
         if "}" in tokens:
+            if self.open_brackets == 0:
+                self.open_brackets += 1
             self.open_brackets -= 1
             
             
