@@ -1,35 +1,72 @@
+import sys
+
+class Error:
+    def __init__(self, name, error, line):
+        print(f"{name}: {error} at line {line}")
+        sys.exit(1)
+
+class Function:
+    def __init__(self, args, line, interpreter):
+        self.args = args
+        self.line = line
+        self.interpreter = interpreter
+        self.get_code()
+    def get_code(self):
+        line = self.line
+        self.code = ""
+        open_brackets = 1
+        while open_brackets > 0:
+            line += 1
+            if line >= len(self.interpreter.lines):
+                Error("EOLError","Unexpected end of file",line)
+                return None
+            for i in self.interpreter.lines[line]:
+                if i == "{":
+                    open_brackets += 1
+                elif i == "}":
+                    open_brackets -= 1
+            if open_brackets>0:self.code += self.interpreter.lines[line] + "\n"
+        finline = ""
+        for i in self.interpreter.lines[line]:
+            if i == "}":
+                break
+            finline += i
+        self.code += finline
+        self.code = self.code[:-1]
+                
+
 class Interpreter:
-    def __init__(self,code=None) -> None:
-        self.vars = {}
-        self.functions = {}
-        self.function_stack = []
+    def __init__(self,code: str|list):
         self.line = 0
-        self.open_brackets = 0
         self.code = code
-        self.line = 0
-        if code:
-            self.lines = self.getLines(code)
-    def getLines(self, code: str) -> list:
+        self.vars = {}
+        self.funcs = {}
+        self.func_stack = []
+        if type(code) == str:self.lines = self.get_lines(code)
+        else:self.lines = code
+    def get_lines(self,code):
+        lines = code.split("\n")
+        i = 0
         ret = []
-        txt = ""
-        j = 0
-        i = code[j]
-        if i in " \t":
-            while i in " \t" and j < len(code):
+        while i < len(lines):
+            linee = ""
+            j = 0
+            line = lines[i]
+            if len(line) == 0:
+                i += 1
+                continue
+            while line[j] in " \t":
                 j += 1
-                i = code[j]
-        while j < len(code):
-            i = code[j]
-            if i == "\n":
-                if txt != "":
-                    ret.append(txt)
-                txt = ""
-            else:
-                txt += i
-            j += 1
-        if txt != "":
-            ret.append(txt)
-        print(code)
+                if j < len(line):
+                    break
+            if line[j] == "#":
+                i += 1
+                continue
+            while j < len(line):
+                linee += line[j]
+                j += 1
+            ret.append(linee)
+            i += 1
         return ret
     def tokenize(self,code: str) -> list:
         tokens = []
@@ -41,7 +78,7 @@ class Interpreter:
         while j < len(code):
             i = code[j]
             if i == None:
-                print("ERROR: Unexpected none-type")
+                Error("ENTError","Unexpected none-type",self.line)
                 return None
             elif i == " ":
                 if txt != "":
@@ -195,163 +232,108 @@ class Interpreter:
         if txt != "":
             tokens.append(txt)
         return tokens
-    def runLine(self, line: str|list):
-        if line is list:
-                tokens = line
-        else: tokens = self.tokenize(line)
-        if (len(tokens) == 0):
-            return
-        self.line += 1
-        if self.open_brackets < 1:
-            # replaces all variables with their values
+    def run(self):
+        tokens_list = []
+        open_braks = []
+        for i in self.lines:
+            tokens_list.append(self.tokenize(i))
+        for tokens in tokens_list:
             j = 0
             while j < len(tokens):
                 i = tokens[j]
                 if i in self.vars and not (j == 0 and "=" in tokens):
                     tokens[j] = self.vars[i]
                 j += 1
-            if tokens[0] == "(":
-                open_paren = 1
-                for i in tokens:
-                    if i == "(":
-                        open_paren += 1
-                    elif i == ")":
-                        open_paren -= 1
-                    if open_paren == 0:
+                self.runLine(tokens)
+    def isstring(self,txt: str):
+        if txt[0] == '"':
+            if txt[1] == '"' and txt[2] == '"':
+                i = 3
+                while i < len(txt):
+                    if txt[i] == '"' and txt[i+1] == '"' and txt[i+2] == '"':
+                        return True
+                    i += 1
+                return False
+            else:
+                i = 1
+                while i < len(txt):
+                    if txt[i] == '"':
+                        return True
+                    if txt[i] == "\n":
+                        Error("EOLError", "End of line reached before string was closed", self.line)
+                return False
+        elif txt[0] == "'":
+            if txt[1] == "'" and txt[2] == "'":
+                i = 3
+                while i < len(txt):
+                    if txt[i] == "'" and txt[i+1] == "'" and txt[i+2] == "'":
+                        return True
+                    i += 1
+                return False
+            else:
+                i = 1
+                while i < len(txt):
+                    if txt[i] == '"':
+                        return True
+                    if txt[i] == "\n":
+                        Error("EOLError", "End of line reached before string was closed", self.line)
+                return False
+    def tostring(self,x):
+        if self.isstring(x):
+            return x
+        return f'"{x}"'
+    def tobool(self,x):
+        if self.isstring(x) and x != '""' and x != "''" and x != '""""""' and x != "''''''":
+            return "true"
+        elif x.isnumeric() and x != "0":
+            return "true"
+        return "false"
+    def runmath(self,tokens):
+        pass
+    def runLine(self,tokens: str|list):
+        BUILTINS = {"print":lambda x: print(self.tostring(x)),"input":lambda x: input(x),"int":lambda x,b=10: int(x,b),"float":lambda x, b: float(x,b),"str":self.tostring,"bool":self.tobool}
+        if type(tokens) == str:
+            temp_inter = Interpreter(self.get_lines(tokens))
+            return temp_inter.run()
+        if len(tokens) == 0:
+            return None
+        if tokens[0] == "let":
+            temp_code = tokens[2:]
+            self.vars[tokens[1]] = self.runLine(temp_code)
+            return None
+        elif tokens[0] in BUILTINS:
+            if tokens[1] == "(":
+                j = 2
+                inp1 = ""
+                inp2 = ""
+                st1 = []
+                st2 = []
+                while j < len(tokens) and tokens[j] != ")":
+                    if tokens[j] == ",":
+                        j += 1
+                        while j < len(tokens) and tokens[j] != ")":
+                            st2.append(tokens[j])
+                            j += 1
                         break
+                    else:st1.append(tokens[j])
+                    j += 1
+                inp1 = self.runLine(st1)
+                inp2 = self.runLine(st2)
+                if inp2:
+                    return BUILTINS[tokens[0]](inp1,inp2)
                 else:
-                    print("ERROR: No closing parenthesis")
-                    return "ERROR: No closing parenthesis"
-            elif tokens[0] == "print":
-                if len(tokens) > 1 and tokens[1] == "(":
-                    if tokens[2] == ")":
-                        print()
-                    else:
-                        innerTokens = tokens[2:-1]
-                        print(self.runLine(innerTokens)[1:-1])
-                else:
-                    return("BUILTIN FUNCTION: print")
-                return
-            elif tokens[0] == "input":
-                if tokens[1] == "(":
-                    if tokens[2] == ")":
-                        return input()
-                    else:
-                        innerTokens = tokens[2:-1]
-                        return input(self.runLine(innerTokens))
-                else:
-                    return("BUILTIN FUNCTION: input")
-            elif tokens[0] == None:
-                print("ERROR: unexpected none-type")
-                return "ERROR: unexpected none-type"
-            elif tokens[0].isnumeric():
-                # create ast
-                return self.runAST(tokens)
-            elif self.isstring(tokens[0]):
-                return self.string(tokens)
-            elif tokens[0] == "let":
-                if tokens[1] in self.vars:
-                    print("ERROR: variable '" + tokens[1] + "' already exists")
-                    return "ERROR: variable '" + tokens[1] + "' already exists"
-                if len(tokens) > 2 and tokens[2] == "=":
-                    self.vars[tokens[1]] = self.runLine(tokens[3:])
-                else:
-                    self.vars[tokens[1]] = None
-            elif tokens[0] in self.vars:
-                if tokens[1] in ["+","-", "*", "/", "%", "^","="]:
-                    if tokens[1] == "=":
-                        self.vars[tokens[0]] = self.runLine(tokens[2:])
-                    elif tokens[2] == "=":
-                        if tokens[1] == "+":
-                            self.vars[tokens[0]] = self.vars[tokens[0]] + self.runLine(tokens[3:])
-                        elif tokens[1] == "-":
-                            self.vars[tokens[0]] = self.vars[tokens[0]] - self.runLine(tokens[3:])
-                        elif tokens[1] == "*":
-                            self.vars[tokens[0]] = self.vars[tokens[0]] * self.runLine(tokens[3:])
-                        elif tokens[1] == "/":
-                            self.vars[tokens[0]] = self.vars[tokens[0]] / self.runLine(tokens[3:])
-                        elif tokens[1] == "%":
-                            self.vars[tokens[0]] = self.vars[tokens[0]] % self.runLine(tokens[3:])
-                        elif tokens[1] == "^":
-                            self.vars[tokens[0]] = self.vars[tokens[0]] ** self.runLine(tokens[3:])
-                    else:
-                        self.vars[tokens[0]] = self.runLine(self.vars[tokens[0]] + tokens[1] + tokens[2])
-            elif tokens[0] == "if":
-                if self.runAST(tokens[1:-1]) == "True":
-                    self.open_brackets -= 1
-            elif tokens[0] == "func":
-                if tokens[1] in self.funcs:
-                    print("ERROR: function '" + tokens[1] + "' already exists")
-                    return "ERROR: function '" + tokens[1] + "' already exists"
-            elif tokens[0] == "#":
-                return
-            elif "{" in tokens:
-                pass
-            elif "}" in tokens:
-                pass
+                    return BUILTINS[tokens[0]](inp1)
             else:
-                print("ERROR: unknown identifier '" + tokens[0] + "'")
-                return "ERROR: unknown identifier '" + tokens[0] + "'"
-        if "{" in tokens:
-            self.open_brackets += 1
-        if "}" in tokens:
-            if self.open_brackets == 0:
-                self.open_brackets += 1
-            self.open_brackets -= 1
-            
-            
-    def runAST(self, tokens: list[str]) -> None:
-        for i in tokens:
-            if not ((i.isnumeric() or i in ["+", "-", "*", "/", "%", "^", "&", "|", "!", "<", ">", "?", ".", "==", "=","(",")"]) or self.isstring(i)):
-                print(self.isstring(i))
-                print(f"ERROR: expected number, got '{i}'")
-                return f"ERROR: expected number, got '{i}'"
-        return str(eval("".join(tokens)))
-    def isstring(self, string: str) -> bool:
-        if string[0] == '"' and string[-1] == '"':
-            return True
-        if string[0] == "'" and string[-1] == "'":
-            return True
-        return False
-    def string(self, tokens: list) -> str:
-        final = ""
-        j = 0
-        if self.isstring(tokens[0]):
-            final += tokens[0][1:-1]
-            j = 1
-        while j < len(tokens):
-            if tokens[j] == "+":
-                j += 1
-                if j > len(tokens):
-                    print("ERROR: expected string after '+'")
-                    return "ERROR: expected string after '+'"
-                if self.isstring(tokens[j]):
-                    final += tokens[j][1:-1]
-                else:
-                    print("ERROR: cannot add non-string to string")
-                    return "ERROR: cannot add non-string to string"
-            elif tokens[j] == "*":
-                j += 1
-                if j > len(tokens):
-                    print("ERROR: expected number after '*'")
-                    return "ERROR: expected number after '*'"
-                if tokens[j].isnumeric():
-                    final *= int(tokens[j])
-                else:
-                    print("ERROR: cannot multiply string by non-number")
-                    return "ERROR: cannot multiply string by non-number"
-            else:
-                print("ERROR: expected '+' or '*' when concatenating strings")
-                return "ERROR: expected '+' or '*' when concatenating strings"
-            j += 1
-        return f'"{final}"'
-    def run(self):
-        self.line = 0
-        while self.line < len(self.lines):
-            print(self.runLine(self.lines[self.line]))
-            self.line += 1
-        
+                return f"BUILTIN: {tokens[0]}"
+        elif tokens[0].isnumeric():
+            return self.runmath(tokens)
+
+
+
 if __name__ == "__main__":
-    inter = Interpreter("print('hello world')")
-    print(inter.lines)
-    inter.run()
+    if len(sys.argv) > 1:
+        with open(sys.argv[1],"r") as f:
+            code = f.read()
+        i = Interpreter(code)
+    else:
+        Error("NFSError","No file specified",0)
